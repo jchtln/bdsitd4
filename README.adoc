@@ -24,6 +24,39 @@ Pour les recherches suivantes, donnez la requête MapReduce correspondante.
 
 . Pour chaque document de type livre, émettre le document avec pour clé « title » ;
 Pour chacun de ces livres, donner le nombre de ses auteurs
++
+[source, js]
+----
+var map = function() {
+    //quand le type est book on transmet la clé(titre,auteurs)
+    if(this.type == "Book") emit(this.title, this.authors.length);
+}
+
+var reduce = function(cle,valeurs) {
+return Array.sum(valeurs);
+}
+
+var query = {query: {"type":"Book"}, out:question1}
+
+db.publis.mapReduce(map,reduce,query);
+
+
+----
++
+[source,js]
+----
+var queryParam = { query: {"type":"Book"}, out :"question1"}
+
+var mapFunction = function() { emit(this.title, this.authors.length)};
+
+var reduceFunction = function(key,values) { return Array.sum(values);};
+
+db.publis.mapReduce(mapFunction,reduceFunction,queryParam);
+{ result: 'question1', ok: 1 }
+
+db.question1.find();
+----
++
 . Pour chaque document ayant « booktitle » (chapitre) publié par Springer, donner le nombre de ses chapitres.
 +
 [WARNING]
