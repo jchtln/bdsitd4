@@ -45,7 +45,7 @@ db.publis.mapReduce(map,reduce,query);
 +
 [source,js]
 ----
-var queryParam = { query: {"type":"Book"}, out :"question1"}
+var queryParam = { query: {"type":"Book"}, out :"question1"};
 
 var mapFunction = function() { emit(this.title, this.authors.length)};
 
@@ -64,11 +64,46 @@ db.question1.find();
 la fonction de reduce n’est évaluée que lorsqu’il y a au moins 2 documents pour une même clé.
 Il est donc nécessaire d’appliquer un filtre après génération du résultat.
 ====
++
+[source,js]
+----
+var queryParam = { query: {"booktitle":{$exists:true}, "publisher":"Springer"},out:"question2"};
+
+var mapFunction = function() { emit(this.booktitle, 1);}
+
+var reduceFunction = function(key,values) { return Array.sum(values);}
+
+db.publis.mapReduce(mapFunction,reduceFunction,queryParam);
+{ result: 'question2', ok:1}
+
+db.q2.find();
+----
++
 . Pour chaque éditeur « Springer », donner le nombre de publication par année
 . Pour chaque clé « publisher & année » (pour ceux qui ont un publisher), donner le nombre de publications
 +
 [TIP]
 la clé du emit() doit être un document.
+
++
+[source,js]
+----
+var map = function(){
+    emit({"type":this.type,"annee":this.year},1);
+}
+
+var reduce = function(cle,valeurs){
+    return Array.sum(valeurs);
+}
+var query = {
+    query: {}, out:"question4"
+}
+
+db.publis.mapReduce(map,reduce,query)
+
+db.question4.find()
+----
++
 . Pour l’auteur « Toru Ishida », donner le nombre de publication par année
 . Pour l’auteur « Toru Ishida », donner le nombre moyen de pages pour ses articles (type Article)
 . Pour chaque auteur, donner le titre de ses publications
