@@ -1,0 +1,292 @@
+﻿
+
+= TP 2 - Requêtes sur une BD non normalisée
+
+Détectez dans votre repo l’archive dblp.json.zip puis la décompresser dans /tmp/<votreRepo>/data.
+
+Lancer un nouveau conteneur docker qui importe ce fichier json (pensez au -v !) dans mongo
+docker run -it --link mongoserver:mongo --rm -v /tmp<votreRepo>/data:/data mongo bash
+
+( puis dans ce container, lancer l'importation des données : mongoimport --db dblp --collection publis --host mongo --port 27017 --file /data/dblp.json --jsonArray)
+
+Cette base DBLP contient des entrées avec des clés pouvant être présentes ou non dans certains cas (clé
+"booktitle", "cites"...), voire des données de type différents (clé "pages").
+----
+{
+"_id" : "books/daglib/0025185",
+"type" : "Book",
+"title" : "MongoDB - The Definitive Guide: Powerful and Scalable Data Storage.",
+"pages" : "I",
+"publisher" : "O’Reilly",
+"year" : 2010,
+"authors" : [ "Kristina Chodorow", "Michael Dirolf" ],
+"isbn" : [ "978-1-449-38156-1" ]
+}
+----
+
+----
+{
+"_id" : "conf/icod/BouzeghoubG83",
+"type" : "Article",
+"title" : "The Design of an Expert System for Database Design.",
+"booktitle" : "ICOD-2 Workshop on New Applications of Data Bases",
+"pages" : { "start" : 203, "end" : 223 },
+"year" : 1983,
+"url" : "db/conf/icod/icod83w.html#BouzeghoubG83",
+"authors" : [ "Mokrane Bouzeghoub", "Georges Gardarin" ],
+"cites" : ["journals/tods/AstrahanBCEGGKLMMPTWW76", "books/bc/AtzeniA93",
+"journals/tcs/AtzeniABM82", "journals/jcss/AbiteboulB86"]
+}
+----
+Cette base contient une extraction des publications de recherche en informatique fournie par DBLP.org :
+- Des articles de conférences/journaux scientifique, de, "type" “Article”, dont le titre est “title” mais l’ouvrage de référence (s’il existe) “booktitle” ;
+- Des chapitres de livre, de, "type" “Book” ayant également title et booktitle ;
+- Des thèses, du, "type" “Phd”.
+- Chaque publication est associé à une liste d’auteurs (authors) et éventuellement un éditeur (publisher).
+- Certaines publications peuvent contenir des références internes avec la clé “cites”
+
+
+=== Questions
+
+. 	Liste de toutes les publications dont le, "type" est un livre (’Book’)
++
+[source, js]
+----
+db.publis.find({"type":"Book"})
+----
++
+. Liste des publications publiées depuis 2011.
++
+[source, js]
+----
+ db.publis.find({"year":{$gte:2011}})
+----
++
+.  Liste des livres depuis 2014
++
+[source, js]
+----
+db.publis.find({"type":"Book","year":{$gte:2014}})
+----
++
+. Liste des publications ayant un éditeur (publisher)
++
+[source, js]
+----
+db.publis.find({"publisher":{$exists:true}})
+----
++
+
+. Liste des publications dont l’auteur est “Jeffrey D. Ullman”
++
+[source, js]
+----
+db.publis.find({"authors":"Jeffrey D. Ullman"})
+----
++
+. Titre des publications dont “Jeffrey D. Ullman” le premier auteur
++
+[source, js]
+----
+db.publis.find({"authors.0":"Jeffrey D. Ullman"}).count()
+
+db.publis.find({"authors.0":"Jeffrey D. Ullman"},{authors:1})
+----
+Le .0 sélectionne le premier élément d'un tableau.
+
++
+. Nom des éditeurs (publisher) et titre des publications dont “Jeffrey D. Ullman” est le seul auteur
++
+[source, js]
+----
+ db.publis.find({"authors":"[Jeffrey D. Ullman]"},{_id:0,publisher:1,title:1})
+
+db.publis.find({"authors.0":"Jeffrey D. Ullman","authors.1":{$exists:false}},{_id:0,publisher:1,title:1})
+----
++
+. Titre des publications dont le titre contient le mot "database"
++
+[source, js]
+----
+ db.publis.find({"title":{$regex:/database/i }})
+----
++
+. Liste distincte de tous les editeurs (“publisher”)
++
+[source, js]
+----
+db.publis.distinct("authors",{"publisher":{$exists:true}}).count()
+----
++
+. Liste de tous les auteurs distincts
++
+[source, js]
+----
+db.publis.distinct("authors")
+----
++
+. 	Pour les publications contenant le mot "database" et dont le titre de l’ouvrage (booktitle)
+et la page de départ existent ; trier par titre d’ouvrage et pages de départ
++
+[source,js]
+----
+db.publis.aggregate( [
+    {$match: {"title": {$regex:/database/i}, "booktitle":{$exists:true}}}
+    {$group: {"title":1,"pages.start":2}}
+    ])
+----
++
+. Projeter le résultat précédent par titres, titres d’ouvrage et pages
++
+[source,js]
+----
+db.publis.aggregate( [
+    {("titres","pages")}
+    {$match: {"title": {$regex:/database/i}, "booktitle":{$exists:true}}}
+    {$group: {"title":1,"pages.start":2}}
+    ])
+----
++
+[source,js]
+----
+db.publis.aggregate( [
+    { $match: {
+        title: /database/i,
+        booktitle: { $exists: true },
+        "pages.start": { $exists: true}
+    }},
+    { $count: "Nombre de résultats :"}
+    ]);
+
+----
++
+. Compter, pour le résultat précédent, le nombre de publications retournées
++
+[source,js]
+----
+db.publis.aggregate( [
+    {("titres","pages")}
+    {$match: {"title": {$regex:/database/i}, "booktitle":{$exists:true}}}
+    {$group: {"title":1,"pages.start":2}}
+    ]).count()
+----
++
+[source,js]
+----
+
+----
++
+. Projeter le résultat précédent par titres, titres d’ouvrage et pages
++
+[source,js]
+----
+db.publis.aggregate([
+    {$match: {
+        "title": /database/i,
+        "booktitle": { $exists: true},
+        "pages.start": { $exists: true }
+    }},
+    { $group: {
+        _id: "$type",
+        "nb_publis": { $sum: 1}
+    }}
+]);
+----
++
+. Compter le nombre de publications par auteur. Trier le résultat par ordre décroissant
++
+[source,js]
+----
+db.publis.aggregate( [
+    {$match: {"auteur"}},
+    {$group: "nbpublis": {$sum:1}}
+])
+----
++
+[source,js]
+----
+db.publis.aggregate([
+    {$unwind: "$authors"},
+    { $group: {
+        _id:"authors",
+        "nb_publis": { $sum: 1}
+    }},
+    { $project: {
+        "authors":1,
+        "nb_publis":1
+    }},
+    { $sort: {
+        "nb_publis":1
+    }},
+]);
+----
+. 	Pour chaque éditeur (s’il existe),
+donner l’année moyenne et le nombre de publications. Trier le résultat par le nombre de publications décroissant
++
+[source,js]
+----
+db.publis.aggregate([
+    {$match: "$publisher"},
+    { $group: {
+        _id:"years",
+        "years": {$avg: 1}
+    }},
+    { $sort: {
+        "nb_publis":1
+    }},
+]);
+----
++
+[source,js]
+----
+db.publis.aggregate([
+    { $match: {
+        publisher: {exists: true}
+    }},
+    { $group: {
+        _id: "$publisher",
+        nb_publis: { $sum:1},
+        annee_moyenne: { $avg: "$year"}
+    }},
+    { $project: {
+        nb_publis:1,
+        annee_moyenne:1
+    }},
+    { $sort : {
+        nb_publis: -1
+    }}
+]);
+----
++
+. 	Compter par année et éditeur (s’il existe),
+le nombre de publications. Pour ces derniers, ne retourner que ceux ayant plus 200 publications
++
+[source,js]
+----
+db.publis.aggregate( [
+    {$match: {"publisher":{$exists:true}}},
+    {$group: {_id: {"editeur":"$publisher", "année":"$year"}, "nbpublis":{$sum:1}}},
+    {$match: {"nbpublis": {$gte:200}}}
+])
+----
++
+. Pour chaque éditeur, calculer la moyenne du nombre de publications par année. Trier le résultat par moyenne décroissante
++
+[source,js]
+----
+db.publis.aggregate( [
+    {
+        {$match: {}
+    }
+])
+----
++
+. 	**** Modifier toutes les publications ayant des pages pour ajouter le champ “pp” avec pour valeur le motif suivant : “start–end”
++
+[source,js]
+----
+
+----
++
+       
+
